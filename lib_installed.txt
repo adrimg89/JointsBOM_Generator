@@ -1,0 +1,6 @@
+pip install ifcopenshell
+
+
+
+pip install pandas
+
