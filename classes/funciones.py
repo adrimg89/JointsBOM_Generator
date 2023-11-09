@@ -169,13 +169,30 @@ def getboxesfilteredwithbalconies(ruta):
             boxesandbalconys.append(i)
     return boxesandbalconys
 
-def export2excel(ruta, boxesinfo):
+def export2excel(ruta):
+    boxesinfo=getboxesfilteredwithbalconies(ruta)
     nombrearchivo=os.path.splitext(os.path.basename(ruta))[0]
     df = pd.DataFrame(boxesinfo)
     ruta_excel = os.path.join(os.path.dirname(ruta), f'{nombrearchivo}.xlsx')
     df.to_excel(ruta_excel, index=False)
     print('Exportación a excel completada')
     
+    
+# def export_excel_infofilteredboxes_withnrofbalconies(rutaifc):
+
+#     datos_export=getboxesfilteredwithbalconies(rutaifc)
+
+#     # Crear un DataFrame de pandas con los resultados
+#     df = pd.DataFrame(datos_export)
+#     # Exportar el DataFrame a un archivo de Excel
+#     export_path="C:/Users/Adrian Moreno/Desktop"
+#     excel_file_path=os.path.join(export_path, "filteredboxeswithbalconies_project.xlsx")
+#     df.to_excel(excel_file_path, index=False)  
+
+#     print("Resultados exportados a filteredboxeswithbalconies_project.xlsx")    
+    
+    
+
 def export_excel_infoallboxes(rutaifc):
     
     datos_export=boxes_info_joint(rutaifc)
@@ -221,3 +238,4 @@ def getmodeledconnections(ruta):
         parameters_info={'RevitGUID':r_guid,'JS_ParentJointInstanceID': parent_joint_id, 'JS_ConnectionTypeID':connectiontype_id}
         connections_info.append(parameters_info)        
     return connections_info
+    # tipo de datos obtenido: {'RevitGUID': '', 'JS_ParentJointInstanceID': 'PJ.V-0047', 'JS_ConnectionTypeID': 'H_T3-0003'}

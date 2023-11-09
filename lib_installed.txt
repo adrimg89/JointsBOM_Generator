@@ -4,3 +4,6 @@ pip install ifcopenshell
 
 pip install pandas
 
+pip install lark-parser
+
+pip install requests
