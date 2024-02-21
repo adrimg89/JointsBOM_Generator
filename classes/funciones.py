@@ -1,8 +1,9 @@
 import ifcopenshell
+import requests
 import math
 import os
+import openpyxl
 import pandas as pd
-import requests
 from passwords import *
 
 
@@ -69,6 +70,8 @@ class Box:
         self.revitguid=revitguid
         self.c01id=c01id
         self.c02id=c02id
+        self.estimatedcost=0
+        self.realcost=0
         
 class Connectiongroup:
     def __init__(self, id, description, cgclass, rl_cgtype_ctype=None, screwlong=None, screwcadence=None, anglecadence=None, angletype=None, endHD=None, balconyHD=None):
@@ -142,7 +145,7 @@ class Ifc:
         return openedifc
     
     def list_bytype(self, element_type):
-        print('Buscando elementos en el IFC por tipo...')
+        # print('Buscando elementos en el IFC por tipo...')
         elementsbytype=self.openedifc.by_type(element_type)
         psets_elements=[]
         for i in elementsbytype:
@@ -151,7 +154,7 @@ class Ifc:
         return psets_elements
     
     def list_byvalue(self,element_type,pset,parameter,value):
-        print('Buscando elementos concretos en el IFC...')
+        # print('Buscando elementos concretos en el IFC...')
         elements_byvalue=[]
         psets_elements=self.list_bytype(element_type)
         for i in psets_elements:
@@ -170,11 +173,9 @@ class Modeledconnection:
         self.performance=1
         self.cgtype=''
 
-
-
         
 class Bomconnectionline:
-    def __init__(self,parent,performance,calcformula,fase,description,connectiontype,sku,materialcost,unit,ismodeled,quantity,layercost,cgtype,materialtype,floor):
+    def __init__(self,parent,performance,calcformula,fase,description,connectiontype,sku,materialcost,unit,ismodeled,quantity,layercost,cgtype,materialtype,floor,revitguid):
         self.parent=parent
         self.performance=performance
         self.calcformula=calcformula
@@ -190,6 +191,7 @@ class Bomconnectionline:
         self.cgtype=cgtype
         self.floor=floor
         self.materialtype=materialtype
+        self.revitguid=revitguid
         
 class Bomjointline:
     def __init__(self,parent,performance,calcformula,fase,description,jointtype,sku,materialcost,unit,quantity,layercost,floor,materialtype):
@@ -213,20 +215,18 @@ class Bomjointline:
        
 #--------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------
-# funciones airtable
+#                                         AIRTABLE
 #--------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------
 
-import requests
-from passwords import *
      
 def airtable_conection(api_key,base_id, base_name):
     print(f'Ejecutando conexión a base de Airtable {base_name}')  
-    connection=Airtable(api_key,base_id)    
+    connection=Airtable(api_key,base_id)        
     return connection        
 
-joints3playground_connect=airtable_conection(adri_joints3playground_api_key,adri_joints3playground_api_key, 'Joints 3 Playground')
-jointsplayground_connect=airtable_conection(adri_jointsplayground_api_key,joints3_base_id, 'Joints Playground')
+joints3playground_connect=airtable_conection(adri_joints3playground_api_key,joints3_base_id, 'Joints 3 Playground')
+jointsplayground_connect=airtable_conection(adri_jointsplayground_api_key,joints2_base_id, 'Joints Playground')
 
 def connectiongroup_records():
     print('Recopilando ConnectionGroup_Types...')    
@@ -302,13 +302,8 @@ def joints2layers_records():
 
 
 
-
-
-
 #--------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------
-# funciones creación de instancias
-#--------------------------------------------------------------------------------------------
+# Instanciado de objetos airtable
 #--------------------------------------------------------------------------------------------
 
 def instanciar_cgtype(connectiongroups):
@@ -410,6 +405,294 @@ def instanciar_jointslayers(jointslayers):
         jointlayers_objects.append(jointlayer_object)
     return jointlayers_objects
 
+
+#--------------------------------------------------------------------------------------------
+# funciones para completar objetos con layers
+#--------------------------------------------------------------------------------------------
+
+def ctypetocgtype(connectiongroup_objects,relations,connectiontype_objects):
+    print('Asignando los ConnectionTypes a los Connectiongroups...')
+    for cg in connectiongroup_objects:
+        ctypesincg=[]
+        for relation in relations:
+            if relation['connectiongroup_type_id']==cg.id:
+                ctypedata={}
+                for i in connectiontype_objects:
+                    if i.id==relation['connection_type']:                        
+                        ctypedata['connection_type']=i
+                        ctypedata['connection_type_id']=i.id
+                ctypedata['Performance']=relation['Performance']
+                ctypedata['Calculation Formula']=relation['Calculation Formula']
+                ctypesincg.append(ctypedata)
+        cg.connectiontypes.extend(ctypesincg)
+        
+def clayertoctype(connectiontype_objects,connectionlayers_objects):
+    print('Asignando ConnectionLayers a los ConnectionTypes...')
+    for ct in connectiontype_objects:
+        clayersinct=[]
+        for layer in connectionlayers_objects:
+            if layer.connectiontype == ct.id:
+                clayersinct.append(layer)
+        ct.connectionlayers.extend(clayersinct)
+        
+def materialtoclayer(connectionlayers_objects,material_objects):
+    print('Asignando materiales a las ConnectionLayers...')
+    for layer in connectionlayers_objects:
+        for material in material_objects:
+            if material.sku==layer.material_sku:
+                layer.material=material
+
+def matlayertomatgroup(matgroup_objects,matlayer_objects):
+    print('Asignando MatLayers a Matgroups...')
+    for matgroup in matgroup_objects:
+        matlayersinmatgroup=[]
+        for matlayer in matlayer_objects:
+            if matlayer.matgroupid==matgroup.id:
+                matlayersinmatgroup.append(matlayer)
+        matgroup.matlayers.extend(matlayersinmatgroup)
+        
+def materialtomatlayer(matlayer_objects,material_objects):
+    print('Asignando materiales a las MatLayers...')
+    for matlayer in matlayer_objects:
+        for material in material_objects:
+            if material.sku==matlayer.material_sku:
+                matlayer.material=material
+
+def jointlayertojoint(joints_objects, jointlayers_objects):
+    print('Asignando Layers a Joints...')
+    for joint in joints_objects:
+        layersinjoint=[]
+        for layer in jointlayers_objects:
+            if layer.matgroupid==joint.id:
+                layersinjoint.append(layer)
+        joint.matlayers.extend(layersinjoint)
+        
+def materialtojointlayer(jointlayer_objects,material_objects):
+    print('Asignando materiales a Joint Layers...')
+    for layer in jointlayer_objects:
+        for material in material_objects:
+            if material.sku==layer.material_sku:
+                layer.material=material
+
+#--------------------------------------------------------------------------------------------
+# funciones para completar objetos de Airtable con costes
+#--------------------------------------------------------------------------------------------
+
+def layercost(connectionlayer_objects):
+    print('Calculando coste de las ConnectionLayers...')
+    for i in connectionlayer_objects:
+        if i.material is not None:
+            i.cost=i.performance*i.material.cost
+            
+def connectioncost(connectiontype_objects):
+    print('Calculando coste de las ConnectionTypes...')
+    for connection in connectiontype_objects:        
+        for layer in connection.connectionlayers:            
+            connection.cost=connection.cost+layer.cost
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+#--------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------
+#                                           IFC
+#--------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------
+
+
+def get_allboxes(ifc_object):
+    type='IfcBuildingElementProxy'
+    pset='EI_Elements Identification'
+    parameter='EI_Type'
+    value='Joint'       
+    boxes=ifc_object.list_byvalue(type,pset,parameter,value)
+    boxes_info=[]
+    for i_psets in boxes:        
+        JS_Joint_Specification = i_psets.get('JS_Joint Specification', {})
+        QU_Quantity=i_psets.get('QU_Quantity',{})
+        Pset_QuantityTakeOff=i_psets.get('Pset_QuantityTakeOff',{})
+        EI_Elements_Identification=i_psets.get('EI_Elements Identification',{})
+        EI_LocalisationCodeFloor=EI_Elements_Identification.get('EI_LocalisationCodeFloor','')
+        JointTypeID = JS_Joint_Specification.get('JS_JointTypeID', '')
+        cgt=JS_Joint_Specification.get('JS_ConnectionGroupTypeID', '')
+        cgc=JS_Joint_Specification.get('JS_ConnectionGroupClass','')
+        parent_joint_id = JS_Joint_Specification.get('JS_ParentJointInstanceID', '')
+        r_guid = i_psets['EI_Interoperability'].get('RevitGUID', '')
+        QU_Length=round(QU_Quantity.get('QU_Length_m', 0), 2)
+        Box_type=Pset_QuantityTakeOff.get('Reference', '')
+        joint_type=JS_Joint_Specification.get('JS_JointType','')
+        inst_a=JS_Joint_Specification.get('JS_C01_ID', '')
+        inst_b=JS_Joint_Specification.get('JS_C02_ID', '')
+        corematgroup=JS_Joint_Specification.get('JS_CORE_matgroup','')
+        Q1matgroup=JS_Joint_Specification.get('JS_Q1_matgroup','')
+        Q2matgroup=JS_Joint_Specification.get('JS_Q2_matgroup','')
+        Q3matgroup=JS_Joint_Specification.get('JS_Q3_matgroup','')
+        Q4matgroup=JS_Joint_Specification.get('JS_Q4_matgroup','')
+        parameters_info={'RevitGUID':r_guid,
+                         'JS_ParentJointInstanceID':parent_joint_id,
+                         'JS_JointTypeID':JointTypeID,
+                         'JS_ConnectionGroupTypeID':cgt,
+                         'Core Matgroup':corematgroup,
+                         'Q1 Matgroup':Q1matgroup,
+                         'Q2 Matgroup':Q2matgroup,
+                         'Q3 Matgroup':Q3matgroup,
+                         'Q4 Matgroup':Q4matgroup,
+                         'QU_Length_m':QU_Length,
+                         'Box_type':Box_type,
+                         'JS_JointType':joint_type,
+                         'JS_ConnectionGroupClass':cgc,
+                         'JS_C01_ID':inst_a,
+                         'JS_C02_ID':inst_b,
+                         'EI_LocalisationCodeFloor':EI_LocalisationCodeFloor
+                         }
+        boxes_info.append(parameters_info)
+    return boxes_info
+
+
+def filter_boxes(all_boxes):
+    parents_unicos=set()
+    filtered_boxes=[]
+    print('Filtrando cajas...')
+    
+    for info in all_boxes:
+        parent=info['JS_ParentJointInstanceID']
+        if parent not in parents_unicos and info['JS_JointType']!='':
+            parents_unicos.add(parent)
+            filtered_boxes.append(info)
+    
+    # print('Primer barrido listo')
+            
+    for info in all_boxes:
+        parent=info['JS_ParentJointInstanceID']
+        if parent not in parents_unicos and 'GMO' in info['Box_type']:
+            parents_unicos.add(parent)
+            filtered_boxes.append(info)
+    
+    # print('Segundo barrido listo')
+    
+    for info in all_boxes:
+        parent=info['JS_ParentJointInstanceID']
+        if parent not in parents_unicos:
+            parents_unicos.add(parent)
+            filtered_boxes.append(info) 
+            
+    # print('Tercer y último barrido listo')
+                
+    return filtered_boxes
+
+
+def get_balconys(ifc_object):
+    balconys=[]
+    elements_bytype=ifc_object.list_bytype('IfcWindow')
+    for i_psets in elements_bytype:
+        QU_Quantity = i_psets.get('QU_Quantity', {})
+        EI_Elements_Identification = i_psets.get('EI_Elements Identification', {})
+        EI_OpeningType = EI_Elements_Identification.get('EI_OpeningType', '')
+        EI_HostComponentInstanceID=EI_Elements_Identification.get('EI_HostComponentInstanceID', '')
+        QU_Height=QU_Quantity.get('QU_Height_m', '')
+        if QU_Height>1.8:
+            balconys.append({'EI_OpeningType':EI_OpeningType,'EI_HostComponentInstanceID':EI_HostComponentInstanceID,'QU_Height_m':QU_Height})
+    return balconys
+
+def get_huecosdepaso(ifc_object):
+    huecos_paso=[]
+    elements_bytype=ifc_object.list_bytype('IfcWall')
+    for i_psets in elements_bytype:
+        Pset_ProductRequirements=i_psets.get('Pset_ProductRequirements',{}) 
+        EI_Elements_Identification=i_psets.get('EI_Elements Identification',{})   
+        EI_HostComponentInstanceID=EI_Elements_Identification.get('EI_HostComponentInstanceID','')
+        EI_OpeningType=EI_Elements_Identification.get('EI_OpeningType', '') 
+        Category=Pset_ProductRequirements.get('Category', '')
+        Params_info={'EI_HostComponentInstanceID':EI_HostComponentInstanceID,'EI_OpeningType':EI_OpeningType, 'Category':Category}
+        if Category=='Doors':
+                huecos_paso.append(Params_info)
+    return huecos_paso
+
+def get_doors(ifc_object):
+    doors=[]
+    elements_bytype=ifc_object.list_bytype('IfcDoor')
+    for i_psets in elements_bytype:
+        Pset_ProductRequirements=i_psets.get('Pset_ProductRequirements',{}) 
+        EI_Elements_Identification=i_psets.get('EI_Elements Identification',{})
+        EI_HostComponentInstanceID=EI_Elements_Identification.get('EI_HostComponentInstanceID','')
+        EI_OpeningType=EI_Elements_Identification.get('EI_OpeningType', '') 
+        Category=Pset_ProductRequirements.get('Category', '')
+        Params_info={'EI_HostComponentInstanceID':EI_HostComponentInstanceID,
+                     'EI_OpeningType':EI_OpeningType,
+                     'Category':Category}
+        doors.append(Params_info)
+    return doors
+
+def get_modeledconnections(ifc_object):
+    modeled_connections=[]
+    elements_byvalue=ifc_object.list_byvalue('IfcBuildingElementProxy','EI_Elements Identification','EI_Type','Connection')
+    for i_psets in elements_byvalue:
+        JS_Joint_Specification = i_psets.get('JS_Joint Specification', {})    
+        EI_Interoperability=i_psets.get('EI_Interoperability', {})
+        EI_Elements_Identification=i_psets.get('EI_Elements Identification',{})
+        EI_LocalisationCodeFloor=EI_Elements_Identification.get('EI_LocalisationCodeFloor','')
+        connectiontype_id = JS_Joint_Specification.get('JS_ConnectionTypeID', '')        
+        parent_joint_id = JS_Joint_Specification.get('JS_ParentJointInstanceID', '')
+        r_guid = EI_Interoperability.get('RevitGUID', '')      
+        parameters_info={'RevitGUID':r_guid,
+                         'JS_ParentJointInstanceID': parent_joint_id,
+                         'JS_ConnectionTypeID':connectiontype_id,
+                         'EI_LocalisationCodeFloor':EI_LocalisationCodeFloor
+                         }
+        modeled_connections.append(parameters_info)
+    return modeled_connections
+        
+
+#agrupamos get_doors y get_huecosdepaso
+def group_alldoors(ifc_object):
+    alldoors_info=get_doors(ifc_object)+get_huecosdepaso(ifc_object)
+    return alldoors_info 
+
+#función que llama a recopilar todas los huecos que nos interesan (junta las 3 funciones huecosdepaso, doors y balconies)
+def counter_openings_byinstance(ifc_object):
+    print('Extrayendo y calculando huecos del modelo que requieren HoldDowns...')
+    #buscamos una respusesta tipo: [{ host_comp_instance : nr_huecosacontabilizar } , { host_comp_instance : nr_huecosacontabilizar }...]
+    
+    info_ifcwindow=get_balconys(ifc_object)
+    alldoors_info=group_alldoors(ifc_object)
+    recuento_balconerasporinstancia={}
+    
+    for balcony in info_ifcwindow:
+        instancia=balcony['EI_HostComponentInstanceID']
+        if instancia in recuento_balconerasporinstancia:
+            recuento_balconerasporinstancia[instancia] += 1
+        else:
+            recuento_balconerasporinstancia[instancia] = 1
+            
+    for door in alldoors_info:
+        instancia=door['EI_HostComponentInstanceID']
+        if instancia in recuento_balconerasporinstancia:
+            recuento_balconerasporinstancia[instancia] += 1
+        else:
+            recuento_balconerasporinstancia[instancia] = 1
+    
+    return recuento_balconerasporinstancia
+
+
+
+#--------------------------------------------------------------------------------------------
+# funciones de instanciado de los objetos procedentes del archivo IFC
+#--------------------------------------------------------------------------------------------
+
 def instanciarIFC(ruta):
     print('Instanciando IFC...')
     ifc_object=Ifc(ruta) 
@@ -505,282 +788,29 @@ def instanciarconexionesmodeladas(conexiones_modeladas,connectiontype_objects):
     return herrajes_objects
 
 
-
-
 #--------------------------------------------------------------------------------------------
+# funciones para completar objetos de IFC 
 #--------------------------------------------------------------------------------------------
-# funciones para completar objetos con layers
-#--------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------
-
-def ctypetocgtype(connectiongroup_objects,relations,connectiontype_objects):
-    print('Asignando los ConnectionTypes a los Connectiongroups...')
-    for cg in connectiongroup_objects:
-        ctypesincg=[]
-        for relation in relations:
-            if relation['connectiongroup_type_id']==cg.id:
-                ctypedata={}
-                for i in connectiontype_objects:
-                    if i.id==relation['connection_type']:                        
-                        ctypedata['connection_type']=i
-                        ctypedata['connection_type_id']=i.id
-                ctypedata['Performance']=relation['Performance']
-                ctypedata['Calculation Formula']=relation['Calculation Formula']
-                ctypesincg.append(ctypedata)
-        cg.connectiontypes.extend(ctypesincg)
+            
+def box_estimated_cost(boxes_objects,bomlines_joints,bomlines_inferredconnections):
+    for box in boxes_objects:
+        for jointline in bomlines_joints:
+            if jointline.parent==box.id:
+                box.estimatedcost=box.estimatedcost+jointline.layercost
         
-def clayertoctype(connectiontype_objects,connectionlayers_objects):
-    print('Asignando ConnectionLayers a los ConnectionTypes...')
-    for ct in connectiontype_objects:
-        clayersinct=[]
-        for layer in connectionlayers_objects:
-            if layer.connectiontype == ct.id:
-                clayersinct.append(layer)
-        ct.connectionlayers.extend(clayersinct)
+        for connectionline in bomlines_inferredconnections:
+            if connectionline.parent==box.id:
+                box.estimatedcost=box.estimatedcost+connectionline.layercost
+            
+def box_real_cost(boxes_objects,bomlines_joints,bomlines_modeledconnections):
+    for box in boxes_objects:
+        for jointline in bomlines_joints:
+            if jointline.parent==box.id:
+                box.realcost=box.realcost+jointline.layercost
         
-def materialtoclayer(connectionlayers_objects,material_objects):
-    print('Asignando materiales a las ConnectionLayers...')
-    for layer in connectionlayers_objects:
-        for material in material_objects:
-            if material.sku==layer.material_sku:
-                layer.material=material
-
-def matlayertomatgroup(matgroup_objects,matlayer_objects):
-    print('Asignando MatLayers a Matgroups...')
-    for matgroup in matgroup_objects:
-        matlayersinmatgroup=[]
-        for matlayer in matlayer_objects:
-            if matlayer.matgroupid==matgroup.id:
-                matlayersinmatgroup.append(matlayer)
-        matgroup.matlayers.extend(matlayersinmatgroup)
-        
-def materialtomatlayer(matlayer_objects,material_objects):
-    print('Asignando materiales a las MatLayers...')
-    for matlayer in matlayer_objects:
-        for material in material_objects:
-            if material.sku==matlayer.material_sku:
-                matlayer.material=material
-
-def jointlayertojoint(joints_objects, jointlayers_objects):
-    print('Asignando Layers a Joints...')
-    for joint in joints_objects:
-        layersinjoint=[]
-        for layer in jointlayers_objects:
-            if layer.matgroupid==joint.id:
-                layersinjoint.append(layer)
-        joint.matlayers.extend(layersinjoint)
-        
-def materialtojointlayer(jointlayer_objects,material_objects):
-    print('Asignando materiales a Joint Layers...')
-    for layer in jointlayer_objects:
-        for material in material_objects:
-            if material.sku==layer.material_sku:
-                layer.material=material
-
-
-
-
-
-#--------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------
-# funciones para completar objetos con costes
-#--------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------
-
-def layercost(connectionlayer_objects):
-    print('Calculando coste de las ConnectionLayers...')
-    for i in connectionlayer_objects:
-        if i.material is not None:
-            i.cost=i.performance*i.material.cost
-            
-def connectioncost(connectiontype_objects):
-    print('Calculando coste de las ConnectionTypes...')
-    for connection in connectiontype_objects:        
-        for layer in connection.connectionlayers:            
-            connection.cost=connection.cost+layer.cost
-            
-
-
-
-            
-#--------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------
-# funciones extracción y depurado de datos del IFC
-#--------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------
-
-
-def get_allboxes(ifc_object):
-    type='IfcBuildingElementProxy'
-    pset='EI_Elements Identification'
-    parameter='EI_Type'
-    value='Joint'       
-    boxes=ifc_object.list_byvalue(type,pset,parameter,value)
-    boxes_info=[]
-    for i_psets in boxes:        
-        JS_Joint_Specification = i_psets.get('JS_Joint Specification', {})
-        QU_Quantity=i_psets.get('QU_Quantity',{})
-        Pset_QuantityTakeOff=i_psets.get('Pset_QuantityTakeOff',{})
-        EI_Elements_Identification=i_psets.get('EI_Elements Identification',{})
-        EI_LocalisationCodeFloor=EI_Elements_Identification.get('EI_LocalisationCodeFloor','')
-        JointTypeID = JS_Joint_Specification.get('JS_JointTypeID', '')
-        cgt=JS_Joint_Specification.get('JS_ConnectionGroupTypeID', '')
-        cgc=JS_Joint_Specification.get('JS_ConnectionGroupClass','')
-        parent_joint_id = JS_Joint_Specification.get('JS_ParentJointInstanceID', '')
-        r_guid = i_psets['EI_Interoperability'].get('RevitGUID', '')
-        QU_Length=round(QU_Quantity.get('QU_Length_m', 0), 2)
-        Box_type=Pset_QuantityTakeOff.get('Reference', '')
-        joint_type=JS_Joint_Specification.get('JS_JointType','')
-        inst_a=JS_Joint_Specification.get('JS_C01_ID', '')
-        inst_b=JS_Joint_Specification.get('JS_C02_ID', '')
-        corematgroup=JS_Joint_Specification.get('JS_CORE_matgroup','')
-        Q1matgroup=JS_Joint_Specification.get('JS_Q1_matgroup','')
-        Q2matgroup=JS_Joint_Specification.get('JS_Q2_matgroup','')
-        Q3matgroup=JS_Joint_Specification.get('JS_Q3_matgroup','')
-        Q4matgroup=JS_Joint_Specification.get('JS_Q4_matgroup','')
-        parameters_info={'RevitGUID':r_guid,
-                         'JS_ParentJointInstanceID':parent_joint_id,
-                         'JS_JointTypeID':JointTypeID,
-                         'JS_ConnectionGroupTypeID':cgt,
-                         'Core Matgroup':corematgroup,
-                         'Q1 Matgroup':Q1matgroup,
-                         'Q2 Matgroup':Q2matgroup,
-                         'Q3 Matgroup':Q3matgroup,
-                         'Q4 Matgroup':Q4matgroup,
-                         'QU_Length_m':QU_Length,
-                         'Box_type':Box_type,
-                         'JS_JointType':joint_type,
-                         'JS_ConnectionGroupClass':cgc,
-                         'JS_C01_ID':inst_a,
-                         'JS_C02_ID':inst_b,
-                         'EI_LocalisationCodeFloor':EI_LocalisationCodeFloor
-                         }
-        boxes_info.append(parameters_info)
-    return boxes_info
-
-
-def filter_boxes(all_boxes):
-    parents_unicos=set()
-    filtered_boxes=[]
-    print('Filtrando cajas...')
-    
-    for info in all_boxes:
-        parent=info['JS_ParentJointInstanceID']
-        if parent not in parents_unicos and info['JS_JointType']!='':
-            parents_unicos.add(parent)
-            filtered_boxes.append(info)
-    
-    print('Primer barrido listo')
-            
-    for info in all_boxes:
-        parent=info['JS_ParentJointInstanceID']
-        if parent not in parents_unicos and 'GMO' in info['Box_type']:
-            parents_unicos.add(parent)
-            filtered_boxes.append(info)
-    
-    print('Segundo barrido listo')
-    
-    for info in all_boxes:
-        parent=info['JS_ParentJointInstanceID']
-        if parent not in parents_unicos:
-            parents_unicos.add(parent)
-            filtered_boxes.append(info) 
-            
-    print('Tercer y último barrido listo')
-                
-    return filtered_boxes
-
-
-def get_balconys(ifc_object):
-    balconys=[]
-    elements_bytype=ifc_object.list_bytype('IfcWindow')
-    for i_psets in elements_bytype:
-        QU_Quantity = i_psets.get('QU_Quantity', {})
-        EI_Elements_Identification = i_psets.get('EI_Elements Identification', {})
-        EI_OpeningType = EI_Elements_Identification.get('EI_OpeningType', '')
-        EI_HostComponentInstanceID=EI_Elements_Identification.get('EI_HostComponentInstanceID', '')
-        QU_Height=QU_Quantity.get('QU_Height_m', '')
-        if QU_Height>1.8:
-            balconys.append({'EI_OpeningType':EI_OpeningType,'EI_HostComponentInstanceID':EI_HostComponentInstanceID,'QU_Height_m':QU_Height})
-    return balconys
-
-def get_huecosdepaso(ifc_object):
-    huecos_paso=[]
-    elements_bytype=ifc_object.list_bytype('IfcWall')
-    for i_psets in elements_bytype:
-        Pset_ProductRequirements=i_psets.get('Pset_ProductRequirements',{}) 
-        EI_Elements_Identification=i_psets.get('EI_Elements Identification',{})   
-        EI_HostComponentInstanceID=EI_Elements_Identification.get('EI_HostComponentInstanceID','')
-        EI_OpeningType=EI_Elements_Identification.get('EI_OpeningType', '') 
-        Category=Pset_ProductRequirements.get('Category', '')
-        Params_info={'EI_HostComponentInstanceID':EI_HostComponentInstanceID,'EI_OpeningType':EI_OpeningType, 'Category':Category}
-        if Category=='Doors':
-                huecos_paso.append(Params_info)
-    return huecos_paso
-
-def get_doors(ifc_object):
-    doors=[]
-    elements_bytype=ifc_object.list_bytype('IfcDoor')
-    for i_psets in elements_bytype:
-        Pset_ProductRequirements=i_psets.get('Pset_ProductRequirements',{}) 
-        EI_Elements_Identification=i_psets.get('EI_Elements Identification',{})
-        EI_HostComponentInstanceID=EI_Elements_Identification.get('EI_HostComponentInstanceID','')
-        EI_OpeningType=EI_Elements_Identification.get('EI_OpeningType', '') 
-        Category=Pset_ProductRequirements.get('Category', '')
-        Params_info={'EI_HostComponentInstanceID':EI_HostComponentInstanceID,
-                     'EI_OpeningType':EI_OpeningType,
-                     'Category':Category}
-        doors.append(Params_info)
-    return doors
-
-def get_modeledconnections(ifc_object):
-    modeled_connections=[]
-    elements_byvalue=ifc_object.list_byvalue('IfcBuildingElementProxy','EI_Elements Identification','EI_Type','Connection')
-    for i_psets in elements_byvalue:
-        JS_Joint_Specification = i_psets.get('JS_Joint Specification', {})    
-        EI_Interoperability=i_psets.get('EI_Interoperability', {})
-        EI_Elements_Identification=i_psets.get('EI_Elements Identification',{})
-        EI_LocalisationCodeFloor=EI_Elements_Identification.get('EI_LocalisationCodeFloor','')
-        connectiontype_id = JS_Joint_Specification.get('JS_ConnectionTypeID', '')        
-        parent_joint_id = JS_Joint_Specification.get('JS_ParentJointInstanceID', '')
-        r_guid = EI_Interoperability.get('RevitGUID', '')      
-        parameters_info={'RevitGUID':r_guid,
-                         'JS_ParentJointInstanceID': parent_joint_id,
-                         'JS_ConnectionTypeID':connectiontype_id,
-                         'EI_LocalisationCodeFloor':EI_LocalisationCodeFloor
-                         }
-        modeled_connections.append(parameters_info)
-    return modeled_connections
-        
-
-
-def group_alldoors(ifc_object):
-    alldoors_info=get_doors(ifc_object)+get_huecosdepaso(ifc_object)
-    return alldoors_info 
-
-def counter_openings_byinstance(ifc_object):
-    
-    #buscamos una respusesta tipo: [{ host_comp_instance : nr_huecosacontabilizar } , { host_comp_instance : nr_huecosacontabilizar }...]
-    
-    info_ifcwindow=get_balconys(ifc_object)
-    alldoors_info=group_alldoors(ifc_object)
-    recuento_balconerasporinstancia={}
-    
-    for balcony in info_ifcwindow:
-        instancia=balcony['EI_HostComponentInstanceID']
-        if instancia in recuento_balconerasporinstancia:
-            recuento_balconerasporinstancia[instancia] += 1
-        else:
-            recuento_balconerasporinstancia[instancia] = 1
-            
-    for door in alldoors_info:
-        instancia=door['EI_HostComponentInstanceID']
-        if instancia in recuento_balconerasporinstancia:
-            recuento_balconerasporinstancia[instancia] += 1
-        else:
-            recuento_balconerasporinstancia[instancia] = 1
-    
-    return recuento_balconerasporinstancia
+        for connectionline in bomlines_modeledconnections:
+            if connectionline.parent==box.id:
+                box.realcost=box.realcost+connectionline.layercost
 
 def nropenings_to_boxes(ifc_object,boxes_objects):
     print('Asignando cantidad de openings a cada caja...')
@@ -790,63 +820,11 @@ def nropenings_to_boxes(ifc_object,boxes_objects):
         if box.box_type=="H.ST_Bottom":
             if componente!='' and componente in openings_by_instance.keys():
                 box.nrbalconies=openings_by_instance[componente]
+
                 
-                
-                
-
-
 #--------------------------------------------------------------------------------------------
+# funciones generadoras de BOM
 #--------------------------------------------------------------------------------------------
-# funciones agrupadoras
-#--------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------
-
-def get_instance_complete_boxes(ruta):
-    #-------------------recopilar datos de airtable
-    connectiongroups=connectiongroup_records()
-    connectiontypes=connectiontype_records()
-    relations=rl_cgtype_ctype_records()
-    clayers=connectionlayers_records()
-    materials=materials_records()
-    materialgroups=materialgroups_records()
-    matlayers=matlayers_records()
-    joints=joints2_records()
-    jointslayers=joints2layers_records()
-        
-    #------------------instanciado de datos de airtable
-    connectiongroup_objects=instanciar_cgtype(connectiongroups)
-    connectiontype_objects=instanciar_ctype(connectiontypes)
-    connectionlayer_objects=instanciar_clayer(clayers)
-    material_objects=instanciar_materials(materials)
-    matgroup_objects=instanciar_matgroups(materialgroups)
-    matlayer_objects=instanciar_matlayers(matlayers)
-    joints_objects=instanciar_joints(joints)
-    jointlayers_objects=instanciar_jointslayers(jointslayers)
-    
-    asignarctypesacgtypes=ctypetocgtype(connectiongroup_objects,relations,connectiontype_objects)
-    asignarclayersactypes=clayertoctype(connectiontype_objects,connectionlayer_objects)
-    asignarmaterialsaclayers=materialtoclayer(connectionlayer_objects,material_objects)
-    asignarmatlayersamatgroups=matlayertomatgroup(matgroup_objects,matlayer_objects)
-    asignarmaterialesamatlayers=materialtomatlayer(matlayer_objects,material_objects)
-    asignarjointlayersajoints=jointlayertojoint(joints_objects,jointlayers_objects)
-    asignarmaterialesajlayers=materialtojointlayer(jointlayers_objects,material_objects)
-    
-    allLayers=jointlayers_objects+matlayer_objects+connectionlayer_objects
-
-    asignarlayercost=layercost(allLayers)
-    asignarconnectioncost=connectioncost(connectiontype_objects)
-    
-    #------------------recopilar datos del modelo
-    ifc_object=instanciarIFC(ruta)
-    allboxes=get_allboxes(ifc_object)
-    filtered_boxes=filter_boxes(allboxes)
-    modeledconnections=get_modeledconnections(ifc_object)
-    
-    #------------------instanciado de datos del modelo
-    boxes_objects=instanciarboxes(filtered_boxes,matgroup_objects,joints_objects,connectiongroup_objects)
-    herrajes_objetos=instanciarconexionesmodeladas(modeledconnections,connectiontype_objects)
-    
-    return boxes_objects,herrajes_objetos
 
 def bomlines_joints(boxes_objects):
     joints_bom_lines=[]
@@ -941,6 +919,7 @@ def bomlines_inferredconnections(boxes_objects):
                         cgtype=box.connectiongroup_type.id
                         materialtype=clayer.material.type
                         floor=box.floor
+                        revitguid=''
                         line=Bomconnectionline(parent,
                                             performance,
                                             calcformula,
@@ -955,7 +934,8 @@ def bomlines_inferredconnections(boxes_objects):
                                             layercost,
                                             cgtype,
                                             materialtype,
-                                            floor)
+                                            floor,
+                                            revitguid)
                         inferredconnections_bom_lines.append(line)
     return inferredconnections_bom_lines
 
@@ -967,7 +947,7 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
         long=box.length
         nrbalconies=box.nrbalconies
         
-        if connectiongrouptype != '' and connectiongrouptype!='J_novalue' and connectiongrouptype!='CG_novalue':
+        if connectiongrouptype != '' and connectiongrouptype!='J_novalue' and connectiongrouptype!='CG_novalue' and herrajes_objects!=[]:
             connectiontypes=connectiongrouptype.connectiontypes
             if connectiontypes!=[]:
                 for contype in connectiontypes:
@@ -1002,7 +982,7 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
                             layercost=clayer.material.cost*quantity 
                             cgtype=box.connectiongroup_type.id
                             materialtype=clayer.material.type
-                            floor=box.floor
+                            floor=box.floor                            
                             line=Bomconnectionline(parent,
                                                 performance,
                                                 calcformula,
@@ -1017,8 +997,11 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
                                                 layercost,
                                                 cgtype,
                                                 materialtype,
-                                                floor)
+                                                floor,
+                                                '')
                             modeledconnections_bom_lines.append(line)
+    
+    
     for herraje in herrajes_objects:  
         ctype=herraje.connectiontype 
         for box in boxes_objects:
@@ -1040,6 +1023,7 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
             cgtype=herraje.cgtype            
             materialtype=clayer.material.type
             floor=herraje.floor
+            revitguid=herraje.revitguid
             line=Bomconnectionline(parent,
                                 performance,
                                 calcformula,
@@ -1054,6 +1038,354 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
                                 layercost,
                                 cgtype,
                                 materialtype,
-                                floor)
+                                floor,
+                                revitguid)
             modeledconnections_bom_lines.append(line) 
     return modeledconnections_bom_lines  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+#--------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------
+#                                           Exportación a Excel
+#--------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------
+
+
+                
+#--------------------------------------------------------------------------------------------
+# funciones para generar diccionarios que se exporten a excel
+#--------------------------------------------------------------------------------------------
+
+def boxes_to_dictlist(boxes_objects):
+    lista=[]
+    for box in boxes_objects:
+        
+        if box.joint_type!='' and box.joint_type!= 'J_novalue':
+            jointtype=box.joint_type.id
+        else:
+            jointtype=''
+            
+        if box.corematgroups != []:
+            corematgroups_ids=[]
+            for i in box.corematgroups:
+                corematgroups_ids.append(i.id)
+            list_corematgroups=','.join(corematgroups_ids)
+        else:
+            list_corematgroups=''
+        
+        if box.q1matgroups != []:
+            q1rematgroups_ids=[]
+            for i in box.q1matgroups:
+                q1rematgroups_ids.append(i.id)
+            list_q1rematgroups=','.join(q1rematgroups_ids)
+        else:
+            list_q1rematgroups=''
+        
+        if box.q2matgroups != []:
+            q2rematgroups_ids=[]
+            for i in box.q2matgroups:
+                q2rematgroups_ids.append(i.id)
+            list_q2rematgroups=','.join(q2rematgroups_ids)
+        else:
+            list_q2rematgroups=''
+            
+        if box.q3matgroups != []:
+            q3rematgroups_ids=[]
+            for i in box.q3matgroups:
+                q3rematgroups_ids.append(i.id)
+            list_q3rematgroups=','.join(q3rematgroups_ids)
+        else:
+            list_q3rematgroups=''
+            
+        if box.q4matgroups != []:
+            q4rematgroups_ids=[]
+            for i in box.q4matgroups:
+                q4rematgroups_ids.append(i.id)
+            list_q4rematgroups=','.join(q4rematgroups_ids)
+        else:
+            list_q4rematgroups=''
+        
+        if box.connectiongroup_type!='' and box.connectiongroup_type!= 'J_novalue' and box.connectiongroup_type!= 'CG_novalue':
+            cgtype=box.connectiongroup_type.id
+        else:
+            cgtype=''
+        
+        diccionario={'RevitGUID':box.revitguid,
+                     'Parent_id':box.id,
+                     'Box Type':box.box_type,
+                     'Joint Type (Joints 3)':box.joints3_type,
+                     'JointType_id (Joints 2)':jointtype,
+                     'Core Matgroup':list_corematgroups,
+                     'Q1 Matgroups':list_q1rematgroups,
+                     'Q2 Matgroups':list_q2rematgroups,
+                     'Q3 Matgroups':list_q3rematgroups,
+                     'Q4 Matgroups':list_q4rematgroups,
+                     'ConnectiongroupType_id':cgtype,
+                     'Length':box.length,
+                     'Nr Balconies':box.nrbalconies,
+                     'Component 1':box.c01id,
+                     'Component 2':box.c02id,
+                     'Floor':box.floor,
+                     'Estimated Cost':box.estimatedcost,
+                     'Real Modeled Cost':box.realcost}
+        lista.append(diccionario)
+    return lista
+
+def jointline_to_dictlist(joints_bom_lines):
+    lista=[]
+    for line in joints_bom_lines:
+        parent=line.parent
+        performance=line.performance
+        calcformula=line.calcformula
+        fase=line.fase
+        description=line.description
+        jointtype=line.jointtype.id
+        sku=line.sku
+        materialcost=line.materialcost
+        unit=line.unit        
+        quantity=line.quantity
+        layercost=line.layercost        
+        floor=line.floor   
+        materialtype=line.materialtype            
+        
+        diccionario={'Parent_ID':parent,
+                     'Performance':performance,
+                     'JointTypeid/MaterialGroup':jointtype,
+                     'Calculation Formula':calcformula,
+                     'SKU':sku,
+                     'Unit':unit,
+                     'Description':description,
+                     'Estimated Material Cost':materialcost,
+                     'Fase':fase,
+                     'Material Type':materialtype,
+                     'Quantity':quantity,
+                     'Layer Cost':layercost,
+                     'Floor':floor}
+        lista.append(diccionario)
+    return lista
+
+def inferredconnectionline_to_dictlist(inferredconnections_bom_lines):
+    lista=[]
+    for line in inferredconnections_bom_lines:
+        parent=line.parent
+        performance=line.performance
+        calcformula=line.calcformula
+        fase=line.fase
+        description=line.description
+        ctype=line.ctype        
+        sku=line.sku
+        materialcost=line.materialcost
+        unit=line.unit 
+        ismodeled=line.ismodeled       
+        quantity=line.quantity
+        layercost=line.layercost 
+        cgtype=line.cgtype       
+        floor=line.floor  
+        materialtype=line.materialtype             
+        
+        diccionario={'Parent_ID':parent,
+                     'Performance':performance,
+                     'Connectiongroup type':cgtype,
+                     'Connection Type':ctype,
+                     'Is Modeled?':ismodeled,
+                     'Calculation Formula':calcformula,
+                     'SKU':sku,
+                     'Unit':unit,
+                     'Description':description,
+                     'Estimated Material Cost':materialcost,
+                     'Fase':fase,
+                     'Material Type':materialtype,
+                     'Quantity':quantity,
+                     'Layer Cost':layercost,
+                     'Floor':floor}
+        lista.append(diccionario)
+    return lista
+
+def modeledconnectionline_to_dictlist(modeledconnections_bom_lines):
+    lista=[]
+    for line in modeledconnections_bom_lines:
+        parent=line.parent
+        performance=line.performance
+        calcformula=line.calcformula
+        fase=line.fase
+        description=line.description
+        ctype=line.ctype        
+        sku=line.sku
+        materialcost=line.materialcost
+        unit=line.unit 
+        ismodeled=line.ismodeled       
+        quantity=line.quantity
+        layercost=line.layercost 
+        cgtype=line.cgtype       
+        floor=line.floor  
+        materialtype=line.materialtype
+        revitguid=line.revitguid             
+        
+        diccionario={'RevitGUID':revitguid,
+                     'Parent_ID':parent,
+                     'Performance':performance,
+                     'Connectiongroup type':cgtype,
+                     'Connection Type':ctype,
+                     'Is Modeled?':ismodeled,
+                     'Calculation Formula':calcformula,
+                     'SKU':sku,
+                     'Unit':unit,
+                     'Description':description,
+                     'Estimated Material Cost':materialcost,
+                     'Fase':fase,
+                     'Material Type':materialtype,
+                     'Quantity':quantity,
+                     'Layer Cost':layercost,
+                     'Floor':floor}
+        lista.append(diccionario)
+    return lista
+                
+
+#--------------------------------------------------------------------------------------------
+# funciones para exportar archivo
+#--------------------------------------------------------------------------------------------
+
+def exportar_a_excel(boxeslist,jointslist,inferredconnectionslist,modeledconnectionslist,ruta):
+    ruta_real=ruta.replace('\\','/')
+    
+    nombrearchivo=os.path.splitext(os.path.basename(ruta_real))[0]
+    
+    df = pd.DataFrame(boxeslist)
+    ruta_excel = os.path.join(os.path.dirname(ruta_real), f'{nombrearchivo}.xlsx')
+    df.to_excel(ruta_excel, index=False)        
+    excel_file = openpyxl.load_workbook(ruta_excel)      
+    excel_file.active.title="Boxes List"
+    
+    hoja_materiales_joints = excel_file.create_sheet(title="Non structural Materials")
+    if jointslist:
+        keys = list(jointslist[0].keys())
+        hoja_materiales_joints.append(keys)
+        for material in jointslist:
+            row_data = [material[key][0] if isinstance(material.get(key, ''), list) else material.get(key, '') for key in keys]
+            hoja_materiales_joints.append(row_data)
+            
+    hoja_inferredconnections = excel_file.create_sheet(title="Inferred Connections")
+    if inferredconnectionslist:
+        keys = list(inferredconnectionslist[0].keys())
+        hoja_inferredconnections.append(keys)
+        for herraje in inferredconnectionslist:
+            row_data = [herraje[key][0] if isinstance(herraje.get(key, ''), list) else herraje.get(key, '') for key in keys]
+            hoja_inferredconnections.append(row_data)
+            
+    hoja_modeledconnections = excel_file.create_sheet(title="Modeled Connections")
+    if modeledconnectionslist:
+        keys = list(modeledconnectionslist[0].keys())
+        hoja_modeledconnections.append(keys)
+        for herraje in modeledconnectionslist:
+            row_data = [herraje[key][0] if isinstance(herraje.get(key, ''), list) else herraje.get(key, '') for key in keys]
+            hoja_modeledconnections.append(row_data)
+            
+    excel_file.save(ruta_excel)
+    print('Archivo guardado con éxito')
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+#--------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------
+#                                           APP
+#--------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------
+
+
+def generate_alldata_joints_fromIFC(ruta):
+    #-------------------recopilar datos de airtable
+    connectiongroups=connectiongroup_records()
+    connectiontypes=connectiontype_records()
+    relations=rl_cgtype_ctype_records()
+    clayers=connectionlayers_records()
+    materials=materials_records()
+    materialgroups=materialgroups_records()
+    matlayers=matlayers_records()
+    joints=joints2_records()
+    jointslayers=joints2layers_records()
+        
+    #------------------instanciado de datos de airtable
+    connectiongroup_objects=instanciar_cgtype(connectiongroups)
+    connectiontype_objects=instanciar_ctype(connectiontypes)
+    connectionlayer_objects=instanciar_clayer(clayers)
+    material_objects=instanciar_materials(materials)
+    matgroup_objects=instanciar_matgroups(materialgroups)
+    matlayer_objects=instanciar_matlayers(matlayers)
+    joints_objects=instanciar_joints(joints)
+    jointlayers_objects=instanciar_jointslayers(jointslayers)
+    
+    allLayers=jointlayers_objects+matlayer_objects+connectionlayer_objects
+    
+    #------------------asignar datos de objetos airtable
+    ctypetocgtype(connectiongroup_objects,relations,connectiontype_objects)
+    clayertoctype(connectiontype_objects,connectionlayer_objects)
+    materialtoclayer(connectionlayer_objects,material_objects)
+    matlayertomatgroup(matgroup_objects,matlayer_objects)
+    materialtomatlayer(matlayer_objects,material_objects)
+    jointlayertojoint(joints_objects,jointlayers_objects)
+    materialtojointlayer(jointlayers_objects,material_objects)
+    
+    
+    #------------------asignar datos de coste a layers
+    layercost(allLayers)
+    connectioncost(connectiontype_objects)
+    
+    #------------------recopilar datos del modelo
+    ifc_object=instanciarIFC(ruta)
+    allboxes=get_allboxes(ifc_object)
+    filtered_boxes=filter_boxes(allboxes)
+    modeledconnections=get_modeledconnections(ifc_object)    
+       
+    #------------------instanciado de datos del modelo
+    boxes_objects=instanciarboxes(filtered_boxes,matgroup_objects,joints_objects,connectiongroup_objects)
+    herrajes_objects=instanciarconexionesmodeladas(modeledconnections,connectiontype_objects)
+    
+    #------------------asignar datos de ventanas a las cajas
+    nropenings_to_boxes(ifc_object,boxes_objects)
+    
+    #------------------generar filas del BOM
+    joints_bom_lines=bomlines_joints(boxes_objects)
+    modeledconnections_bom_lines=bomlines_modeledconnections(boxes_objects,herrajes_objects)
+    inferredconnections_bom_lines=bomlines_inferredconnections(boxes_objects)
+    
+    #------------------asignación de coste estimado y real a cada caja
+    box_estimated_cost(boxes_objects,joints_bom_lines,inferredconnections_bom_lines)
+    box_real_cost(boxes_objects,joints_bom_lines,modeledconnections_bom_lines)
+    
+    return boxes_objects,joints_bom_lines,inferredconnections_bom_lines,modeledconnections_bom_lines
+    
+def transform_boxes_info_for_bom_excel_and_generate(boxes_objects,joints_bom_lines,inferredconnections_bom_lines,modeledconnections_bom_lines,ruta):
+    boxeslist=boxes_to_dictlist(boxes_objects)
+    jointslist=jointline_to_dictlist(joints_bom_lines)
+    inferredconnectionslist=inferredconnectionline_to_dictlist(inferredconnections_bom_lines)
+    modeledconnectionslist=modeledconnectionline_to_dictlist(modeledconnections_bom_lines)
+    
+    exportar_a_excel(boxeslist,jointslist,inferredconnectionslist,modeledconnectionslist,ruta)
