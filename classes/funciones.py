@@ -43,8 +43,13 @@ class Airtable:
             if not offset:
                 break
             params['offset'] = offset
+        
+        depurated_data=[]
+        
+        for i in data:
+            depurated_data.append(i['fields'])
             
-        return data
+        return depurated_data
         # example with custom filter: at.list('Contracts',filter="AND({Contract Type}='Obra' , {Project}='5')")
 
     def insert(self, table, data):
@@ -225,80 +230,26 @@ def airtable_conection(api_key,base_id, base_name):
     connection=Airtable(api_key,base_id)        
     return connection        
 
-joints3playground_connect=airtable_conection(adri_joints3playground_api_key,joints3_base_id, 'Joints 3 Playground')
-jointsplayground_connect=airtable_conection(adri_jointsplayground_api_key,joints2_base_id, 'Joints Playground')
+def getrecords_from_Joints3Playground():
+    joints3playground_connect=airtable_conection(adri_joints3playground_api_key,joints3_base_id, 'Joints 3 Playground')
+    
+    connectiongroup_types=joints3playground_connect.list(cgtype_table,view='AM', fields=['cgtype_id','Description','api_ConnectionGroup_Class','param_screwlong', 'param_screwcadence','param_anglecadence','param_angletype','param_endHD','param_balconyHD', 'RL_ConnectionGroupType_ConnectionType_api'])
+    connection_types=joints3playground_connect.list(connectiontype_table, fields=['connection_type_id','description','box_type (from boxtype_id)','is_modeled','RL_ConnectionGroupType_Connectiontype_api'])
+    relations=joints3playground_connect.list(rl_cgtype_ctype_table, fields=['RL_cgtype_ctype','connectiongroup_type_id','connection_type','Performance','Calculation Formula']) 
+    connection_layers=joints3playground_connect.list(clayers_table, fields=['Name','connection_type_code','material_id','Performance', 'Calculation Formula','Current_material_cost','Units','Description (from Material)', 'Fase'])
+    materials=joints3playground_connect.list(materials_table, fields=['SKU','Description','Measurement_Unit','Estimated Cost','Type of material'])
+    materialgroups=joints3playground_connect.list(materialgroups_table, fields=['material_group','Description'])
+    matlayers=joints3playground_connect.list(materiallayers_table,fields=['material_layer','material_group_id','material_id','Performance','Calculation Formula','Fase'])
+    
+    return connectiongroup_types,connection_types,relations,connection_layers,materials,materialgroups,matlayers
 
-def connectiongroup_records():
-    print('Recopilando ConnectionGroup_Types...')    
-    resultados_cgtype = joints3playground_connect.list(cgtype_table,view='AM', fields=['cgtype_id','Description','api_ConnectionGroup_Class','param_screwlong', 'param_screwcadence','param_anglecadence','param_angletype','param_endHD','param_balconyHD', 'RL_ConnectionGroupType_ConnectionType_api'])
-    connectiongroup_types = []
-    for i in resultados_cgtype:
-        connectiongroup_types.append(i['fields'])
-    return connectiongroup_types
+def getrecords_from_JointsPlayground():
+    jointsplayground_connect=airtable_conection(adri_jointsplayground_api_key,joints2_base_id, 'Joints Playground')
 
-def connectiontype_records():
-    print('Recopilando Connection_Types...')  
-    resultados_connectiontype = joints3playground_connect.list(connectiontype_table, fields=['connection_type_id','description','box_type (from boxtype_id)','is_modeled','RL_ConnectionGroupType_Connectiontype_api'])
-    connection_types = []    
-    for i in resultados_connectiontype:
-        connection_types.append(i['fields'])
-    return connection_types
-
-def rl_cgtype_ctype_records():
-    print('Recopilando Relaciones entre ConnectionGroups y ConnectionTypes...')
-    resultados_rl_cgtype_ctype = joints3playground_connect.list(rl_cgtype_ctype_table, fields=['RL_cgtype_ctype','connectiongroup_type_id','connection_type','Performance','Calculation Formula']) 
-    relations=[]
-    for i in resultados_rl_cgtype_ctype:
-        relations.append(i['fields'])
-    return relations
-
-def connectionlayers_records():
-    print('Recopilando ConnectionLayers...')
-    resultados_clayers=joints3playground_connect.list(clayers_table, fields=['Name','connection_type_code','material_id','Performance', 'Calculation Formula','Current_material_cost','Units','Description (from Material)', 'Fase'])
-    layers=[]
-    for i in resultados_clayers:
-        layers.append(i['fields'])
-    return layers
-
-def materials_records():
-    print('Recopilando materiales...')
-    resultados_materiales=joints3playground_connect.list(materials_table, fields=['SKU','Description','Measurement_Unit','Estimated Cost','Type of material'])
-    materials=[]
-    for i in resultados_materiales:
-        materials.append(i['fields'])
-    return materials
-
-def materialgroups_records():
-    print('Recopilando MaterialGroups...')
-    resultadosmaterialgroups=joints3playground_connect.list(materialgroups_table, fields=['material_group','Description'])
-    materialgroups=[]
-    for i in resultadosmaterialgroups:
-        materialgroups.append(i['fields'])
-    return materialgroups
-
-def matlayers_records():
-    print('Recopilando MaterialLayers...')
-    resultadosmatlayers=joints3playground_connect.list(materiallayers_table,fields=['material_layer','material_group_id','material_id','Performance','Calculation Formula','Fase'])
-    matlayers=[]
-    for i in resultadosmatlayers:
-        matlayers.append(i['fields'])
-    return matlayers
-
-def joints2_records():
-    print('Recopilando datos de tipologías de Joints 2...')
-    resultadosjoints2=jointsplayground_connect.list(joints_table,view='Adri export',fields=['joint_type_id','joint_description [toDeprecate]'])
-    joints=[]
-    for i in resultadosjoints2:
-        joints.append(i['fields'])
-    return joints
-
-def joints2layers_records():
-    print('Recopilando layers de Joints 2...')
-    resultadosjoints2layers=jointsplayground_connect.list(jointlayers_table,view='AMG_export',fields=['Name','api_id','material_id','Performance','Calculation Formula','Fase'])
-    joints2layers=[]
-    for i in resultadosjoints2layers:
-        joints2layers.append(i['fields'])
-    return(joints2layers)
+    joints=jointsplayground_connect.list(joints_table,view='Adri export',fields=['joint_type_id','joint_description [toDeprecate]'])
+    jointslayers=jointsplayground_connect.list(jointlayers_table,view='AMG_export',fields=['Name','api_id','material_id','Performance','Calculation Formula','Fase'])
+    
+    return joints,jointslayers
 
 
 
@@ -1322,15 +1273,8 @@ def exportar_a_excel(boxeslist,jointslist,inferredconnectionslist,modeledconnect
 
 def generate_alldata_joints_fromIFC(ruta):
     #-------------------recopilar datos de airtable
-    connectiongroups=connectiongroup_records()
-    connectiontypes=connectiontype_records()
-    relations=rl_cgtype_ctype_records()
-    clayers=connectionlayers_records()
-    materials=materials_records()
-    materialgroups=materialgroups_records()
-    matlayers=matlayers_records()
-    joints=joints2_records()
-    jointslayers=joints2layers_records()
+    connectiongroups,connectiontypes,relations,clayers,materials,materialgroups,matlayers=getrecords_from_Joints3Playground()
+    joints,jointslayers=getrecords_from_JointsPlayground()
         
     #------------------instanciado de datos de airtable
     connectiongroup_objects=instanciar_cgtype(connectiongroups)
