@@ -230,8 +230,8 @@ def airtable_conection(api_key,base_id, base_name):
     connection=Airtable(api_key,base_id)        
     return connection     
 
-JOINTS3PLAYGROUND_CONNECT=airtable_conection(adri_joints3playground_api_key,joints3_base_id, 'Joints 3 Playground')   
-JOINTSPLAYGROUND_CONNECT=airtable_conection(adri_jointsplayground_api_key,joints2_base_id, 'Joints Playground')
+JOINTS3PLAYGROUND_CONNECT=airtable_conection(ADRI_JOINTS3PLAYGROUND_API_KEY,JOINTS3_BASE_ID, 'Joints 3 Playground')   
+JOINTSPLAYGROUND_CONNECT=airtable_conection(ADRI_JOINTSPLAYGROUND_API_KEY,JOINTS2_BASE_ID, 'Joints Playground')
 
 def getrecords(connection,table,fields,view='API'):
     records=connection.list(table,fields,view)
@@ -1271,16 +1271,16 @@ def generate_alldata_joints_fromIFC(ruta):
     
     print('Extrayendo datos necesarios de Airtable...')
     
-    connectiongroup_types=getrecords(JOINTS3PLAYGROUND_CONNECT,cgtype_table,['cgtype_id','Description','api_ConnectionGroup_Class','param_screwlong', 'param_screwcadence','param_anglecadence','param_angletype','param_endHD','param_balconyHD', 'RL_ConnectionGroupType_ConnectionType_api'],view='AM')
-    connection_types=getrecords(JOINTS3PLAYGROUND_CONNECT,connectiontype_table,['connection_type_id','description','box_type (from boxtype_id)','is_modeled','RL_ConnectionGroupType_Connectiontype_api'])
-    relations=getrecords(JOINTS3PLAYGROUND_CONNECT,rl_cgtype_ctype_table,['RL_cgtype_ctype','connectiongroup_type_id','connection_type','Performance','Calculation Formula']) 
-    connection_layers=getrecords(JOINTS3PLAYGROUND_CONNECT,clayers_table,['Name','connection_type_code','material_id','Performance', 'Calculation Formula','Current_material_cost','Units','Description (from Material)', 'Fase'])
-    materials=getrecords(JOINTS3PLAYGROUND_CONNECT,materials_table,['SKU','Description','Measurement_Unit','Estimated Cost','Type of material'])
-    materialgroups=getrecords(JOINTS3PLAYGROUND_CONNECT,materialgroups_table,['material_group','Description'])
-    matlayers=getrecords(JOINTS3PLAYGROUND_CONNECT,materiallayers_table,['material_layer','material_group_id','material_id','Performance','Calculation Formula','Fase'])
+    connectiongroup_types=getrecords(JOINTS3PLAYGROUND_CONNECT,CGTYPE_TABLE,['cgtype_id','Description','api_ConnectionGroup_Class','param_screwlong', 'param_screwcadence','param_anglecadence','param_angletype','param_endHD','param_balconyHD', 'RL_ConnectionGroupType_ConnectionType_api'],view='AM')
+    connection_types=getrecords(JOINTS3PLAYGROUND_CONNECT,CONNECTIONTYPE_TABLE,['connection_type_id','description','box_type (from boxtype_id)','is_modeled','RL_ConnectionGroupType_Connectiontype_api'])
+    relations=getrecords(JOINTS3PLAYGROUND_CONNECT,RL_CGTYPE_CTYPE_TABLE,['RL_cgtype_ctype','connectiongroup_type_id','connection_type','Performance','Calculation Formula']) 
+    connection_layers=getrecords(JOINTS3PLAYGROUND_CONNECT,CLAYERS_TABLE,['Name','connection_type_code','material_id','Performance', 'Calculation Formula','Current_material_cost','Units','Description (from Material)', 'Fase'])
+    materials=getrecords(JOINTS3PLAYGROUND_CONNECT,MATERIALS_TABLE,['SKU','Description','Measurement_Unit','Estimated Cost','Type of material'])
+    materialgroups=getrecords(JOINTS3PLAYGROUND_CONNECT,MATERIALGROUPS_TABLE,['material_group','Description'])
+    matlayers=getrecords(JOINTS3PLAYGROUND_CONNECT,MATEIRALLAYERS_TABLE,['material_layer','material_group_id','material_id','Performance','Calculation Formula','Fase'])
 
-    joints=getrecords(JOINTSPLAYGROUND_CONNECT,joints_table,['joint_type_id','joint_description [toDeprecate]'],view='Adri export')
-    jointslayers=getrecords(JOINTSPLAYGROUND_CONNECT,jointlayers_table,['Name','api_id','material_id','Performance','Calculation Formula','Fase'],view='AMG_export')
+    joints=getrecords(JOINTSPLAYGROUND_CONNECT,JOINTS_TABLE,['joint_type_id','joint_description [toDeprecate]'],view='Adri export')
+    jointslayers=getrecords(JOINTSPLAYGROUND_CONNECT,JOINTLAYERS_TABLE,['Name','api_id','material_id','Performance','Calculation Formula','Fase'],view='AMG_export')
 
         
     #------------------instanciado de datos de airtable
