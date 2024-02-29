@@ -1,4 +1,14 @@
 /env
 passwords.py
 app2.py
+app3.py
 funciones_2.py
+/classes/__pycache__
+/__pycache__
+app.spec
+requirements.txt
+notes.txt
+/images
+/build
+/dist
+TuApp.spec

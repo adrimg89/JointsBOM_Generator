@@ -1,0 +1,51 @@
+--------------------------------------------------------------------------------------------
+--               App generadora de BOM de Joints a partir de archivo IFC                  --
+--------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------------------
+--                                        v01.00                                          --
+--------------------------------------------------------------------------------------------
+
+
+
+Input necesario: archivo IFC con Joints creadas e informadas 
+(apto tanto sistema Joints2 como en sistema Joints3)
+
+    - Importante: para que la herramienta dar un número más preciso de estimación de herrajes, 
+    es importante que el ifc contenga los huecos de paso, puertas y ventanas del edificio.
+
+
+--------------------------------------------------------------------------------------------
+
+
+Output: archivo excel con varias pestañas:
+
+    - Boxes list: listado de cajas parent existentes en el modelo.
+
+    - "Non structural materials": conjunto de materiales no estructurales inferidos en las cajas. 
+    Resultado del reporte de los material groups (o códigos J_xxxx en el caso de Joints2).
+
+    - "Inferred Connections": se reportan los materiales inferidos, sin tener en cuenta en ningún 
+    caso que pueda haber herrajes modelados.
+
+    - "Modeled Connections Cost": conjunto de materiales de conexión estructural mezcla de modelados 
+    e inferidos:
+        - Los elementos que nunca son representados en el modelo (como los tornillos) proceden de la
+        estimación inferida en la caja
+        - Los elementos que se modelan (como por ejemplo las escuadras), proceden de lo realmente 
+        modelado, así como sus materiales asociados se cuentan en función de lo modelado
+
+
+-----------------------------------------------------------------------------------------------
+
+
+La pestaña Boxes list contiene tres columnas de coste:
+
+    - "Non Structural Materials Cost" muestra la suma de los costes de los materiales
+    incluidos en la pestaña "Non structural materials" para ese parent.
+
+    - "Inferred Connections Cost" muestra la suma de los costes de los materiales
+    incluidos en la pestaña "Inferred Connections" para ese parent.
+
+    - "Modeled Connections Cost" muestra la suma de los costes de los materiales
+    incluidos en la pestaña "Modeled Connections" para ese parent.

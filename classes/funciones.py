@@ -3,6 +3,10 @@ import requests
 import math
 import os
 import openpyxl
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.styles import Font, PatternFill,Border,Side
+from openpyxl.styles import NamedStyle
+from openpyxl.styles import numbers
 import pandas as pd
 from passwords import *
 
@@ -1240,7 +1244,41 @@ def exportar_a_excel(boxeslist,jointslist,inferredconnectionslist,modeledconnect
             for herraje in modeledconnectionslist:
                 row_data = [herraje[key][0] if isinstance(herraje.get(key, ''), list) else herraje.get(key, '') for key in keys]
                 hoja_modeledconnections.append(row_data)
-            
+    
+    # Definir un estilo para el formato de moneda
+    currency_style = NamedStyle(name='currency', number_format='#,##0.00 "€"')
+    
+    for sheet_name in excel_file.sheetnames:
+        sheet = excel_file[sheet_name]
+        table_name = sheet_name.replace(" ", "_")  # Reemplazar espacios con guiones bajos
+        table = Table(displayName=table_name, ref=sheet.dimensions)
+        
+        # Identificar columnas con encabezados que contienen la palabra "Cost" o "cost"
+        cost_columns = [col_idx for col_idx, header_cell in enumerate(sheet[1], 1) if "Cost" in header_cell.value or "cost" in header_cell.value]
+
+        # Aplicar estilo de moneda a las celdas en las columnas identificadas
+        for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, min_col=min(cost_columns), max_col=max(cost_columns)):
+            for cell in row:
+                if sheet.cell(row=1, column=cell.column).value and ("Cost" in sheet.cell(row=1, column=cell.column).value or "cost" in sheet.cell(row=1, column=cell.column).value):
+                    cell.style = currency_style
+        
+
+        # Aplicar estilo a encabezados (primera fila)
+        for header_cell in sheet[1]:
+            header_cell.font = Font(color="EEE8D3", bold=True)
+            header_cell.fill = PatternFill(start_color="3a6739", end_color="3a6739", fill_type="solid")
+            header_cell.border = Border(top=Side(style='thin', color='EEE8D3'),left=Side(style='thin', color='EEE8D3'))
+
+        # Aplicar estilo a contenido de la tabla
+        for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row, min_col=1, max_col=sheet.max_column):
+            for cell in row:
+                cell.font = Font(color="101E15")
+                cell.fill = PatternFill(start_color="EEE8D3", end_color="EEE8D3", fill_type="solid")
+                cell.border = Border(top=Side(style='thin', color='3a6739'),left=Side(style='thin', color='3a6739'))
+
+
+        sheet.add_table(table)
+    
     excel_file.save(ruta_excel)
     print('')
     print('Archivo guardado con éxito')
