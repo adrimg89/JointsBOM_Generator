@@ -765,7 +765,10 @@ def nropenings_to_boxes(ifc_object,boxes_objects):
                 box.nrbalconies=openings_by_instance[componente]
                 contador=contador+openings_by_instance[componente]
                 
-    if contador==0:print('------------------ /!\ /!\  ALERTA: No ha sido posible encontrar ningún opening que genere holddown en el modelo /!\ /!\  ------------------')
+    if contador==0:
+        print('')
+        print('-- /!\ /!\ ALERTA: No detectados openings en el modelo /!\ /!\ --')
+        print('')
 
                 
 #--------------------------------------------------------------------------------------------
