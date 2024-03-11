@@ -182,10 +182,11 @@ class Modeledconnection:
         self.floor=floor
         self.performance=1
         self.cgtype=''
+        self.cgclass=''
 
         
 class Bomconnectionline:
-    def __init__(self,parent,performance,calcformula,fase,description,connectiontype,sku,materialcost,unit,ismodeled,quantity,layercost,cgtype,materialtype,floor,revitguid):
+    def __init__(self,parent,performance,calcformula,fase,description,connectiontype,sku,materialcost,unit,ismodeled,quantity,layercost,cgtype,cgclass,materialtype,floor,revitguid):
         self.parent=parent
         self.performance=performance
         self.calcformula=calcformula
@@ -199,6 +200,7 @@ class Bomconnectionline:
         self.quantity=quantity
         self.layercost=layercost
         self.cgtype=cgtype
+        self.cgclass=cgclass
         self.floor=floor
         self.materialtype=materialtype
         self.revitguid=revitguid
@@ -295,7 +297,7 @@ def instanciar_materials(materials):
         material_object=Material(i['SKU'],
                                  i['Description'],
                                  i['Measurement_Unit'],
-                                 i['Estimated Cost'],
+                                 i.get('Estimated Cost',0),
                                  i['Type of material'])
         materials_objects.append(material_object)
     return materials_objects
@@ -866,6 +868,7 @@ def bomlines_inferredconnections(boxes_objects):
                             quantity=math.ceil(quantity)
                         layercost=clayer.material.cost*quantity 
                         cgtype=box.connectiongroup_type.id
+                        cgclass=box.connectiongroup_type.cgclass
                         materialtype=clayer.material.type
                         floor=box.floor
                         revitguid=''
@@ -882,6 +885,7 @@ def bomlines_inferredconnections(boxes_objects):
                                             quantity,
                                             layercost,
                                             cgtype,
+                                            cgclass,
                                             materialtype,
                                             floor,
                                             revitguid)
@@ -930,6 +934,7 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
                                 quantity=math.ceil(quantity)
                             layercost=clayer.material.cost*quantity 
                             cgtype=box.connectiongroup_type.id
+                            cgclass=box.connectiongroup_type.cgclass
                             materialtype=clayer.material.type
                             floor=box.floor                            
                             line=Bomconnectionline(parent,
@@ -945,6 +950,7 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
                                                 quantity,
                                                 layercost,
                                                 cgtype,
+                                                cgclass,
                                                 materialtype,
                                                 floor,
                                                 '')
@@ -956,6 +962,7 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
         for box in boxes_objects:
             if herraje.parent==box.id and box.connectiongroup_type!='':
                 herraje.cgtype=box.connectiongroup_type.id
+                herraje.cgclass=box.connectiongroup_type.cgclass
         for clayer in ctype.connectionlayers:        
             parent=herraje.parent
             performance=clayer.performance
@@ -969,7 +976,8 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
             ismodeled=ctype.is_modeled
             quantity=clayer.performance            
             layercost=clayer.cost
-            cgtype=herraje.cgtype            
+            cgtype=herraje.cgtype 
+            cgclass=herraje.cgclass           
             materialtype=clayer.material.type
             floor=herraje.floor
             revitguid=herraje.revitguid
@@ -986,6 +994,7 @@ def bomlines_modeledconnections(boxes_objects,herrajes_objects):
                                 quantity,
                                 layercost,
                                 cgtype,
+                                cgclass,
                                 materialtype,
                                 floor,
                                 revitguid)
@@ -1073,8 +1082,10 @@ def boxes_to_dictlist(boxes_objects):
         
         if box.connectiongroup_type!='' and box.connectiongroup_type!= 'J_novalue' and box.connectiongroup_type!= 'CG_novalue':
             cgtype=box.connectiongroup_type.id
+            cgclass=box.connectiongroup_type.cgclass
         else:
             cgtype=''
+            cgclass=''
         
         diccionario={'RevitGUID':box.revitguid,
                      'Parent_id':box.id,
@@ -1087,6 +1098,7 @@ def boxes_to_dictlist(boxes_objects):
                      'Q3 Matgroups':list_q3rematgroups,
                      'Q4 Matgroups':list_q4rematgroups,
                      'ConnectiongroupType_id':cgtype,
+                     'ConnectiongroupClass':cgclass,
                      'Length':box.length,
                      'Nr Balconies':box.nrbalconies,
                      'Component 1':box.c01id,
@@ -1146,13 +1158,15 @@ def inferredconnectionline_to_dictlist(inferredconnections_bom_lines):
         ismodeled=line.ismodeled       
         quantity=line.quantity
         layercost=line.layercost 
-        cgtype=line.cgtype       
+        cgtype=line.cgtype 
+        cgclass=line.cgclass      
         floor=line.floor  
         materialtype=line.materialtype             
         
         diccionario={'Parent_ID':parent,
                      'Performance':performance,
                      'Connectiongroup type':cgtype,
+                     'Connectiongroup class':cgclass,
                      'Connection Type':ctype,
                      'Is Modeled?':ismodeled,
                      'Calculation Formula':calcformula,
@@ -1183,7 +1197,8 @@ def modeledconnectionline_to_dictlist(modeledconnections_bom_lines):
         ismodeled=line.ismodeled       
         quantity=line.quantity
         layercost=line.layercost 
-        cgtype=line.cgtype       
+        cgtype=line.cgtype
+        cgclass=line.cgclass       
         floor=line.floor  
         materialtype=line.materialtype
         revitguid=line.revitguid             
@@ -1192,6 +1207,7 @@ def modeledconnectionline_to_dictlist(modeledconnections_bom_lines):
                      'Parent_ID':parent,
                      'Performance':performance,
                      'Connectiongroup type':cgtype,
+                     'Connectiongroup class':cgclass,
                      'Connection Type':ctype,
                      'Is Modeled?':ismodeled,
                      'Calculation Formula':calcformula,
