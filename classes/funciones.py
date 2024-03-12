@@ -669,28 +669,33 @@ def instanciarboxes(boxes,materialgroup_objects,joints2_objects,connectiongroups
         for materialgroup in materialgroup_objects:
             corematgroups_text=i.get('Core Matgroup','')
             corematgroups_id=corematgroups_text.split(',')
-            if materialgroup.id in corematgroups_id:
-                corematgroupslist.append(materialgroup)
+            for id in corematgroups_id:
+                if materialgroup.id == id:
+                    corematgroupslist.append(materialgroup)
                 
             q1matgroups_text=i.get('Q1 Matgroup','')
             q1matgroups_id=q1matgroups_text.split(',')
-            if materialgroup.id in q1matgroups_id:
-                q1matgroupslist.append(materialgroup)
+            for id in q1matgroups_id:
+                if materialgroup.id == id:
+                    q1matgroupslist.append(materialgroup)
                 
             q2matgroups_text=i.get('Q2 Matgroup','')
             q2matgroups_id=q2matgroups_text.split(',')
-            if materialgroup.id in q2matgroups_id:
-                q2matgroupslist.append(materialgroup)
+            for id in q2matgroups_id:
+                if materialgroup.id == id:
+                    q2matgroupslist.append(materialgroup)
                 
             q3matgroups_text=i.get('Q3 Matgroup','')
             q3matgroups_id=q3matgroups_text.split(',')
-            if materialgroup.id in q3matgroups_id:
-                q3matgroupslist.append(materialgroup)
+            for id in q3matgroups_id:
+                if materialgroup.id == id:
+                    q3matgroupslist.append(materialgroup)
             
             q4matgroups_text=i.get('Q4 Matgroup','')
             q4matgroups_id=q4matgroups_text.split(',')
-            if materialgroup.id in q4matgroups_id:
-                q4matgroupslist.append(materialgroup)
+            for id in q4matgroups_id:
+                if materialgroup.id == id:
+                    q4matgroupslist.append(materialgroup)
                 
         floor=i.get('EI_LocalisationCodeFloor','')
         revitguid=i.get('RevitGUID','')
